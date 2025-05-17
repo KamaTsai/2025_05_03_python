@@ -4,7 +4,7 @@ min = 1
 max = 100
 count = 0
 target = random.randint(1, 100)
-print(target)
+#print(target)
 print("===============猜數字遊戲=================:\n")
 while(True):
     count += 1
