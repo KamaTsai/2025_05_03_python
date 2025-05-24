@@ -3,7 +3,7 @@
 # 重複呼叫
 # 簡化主程式中的程式碼
 
-# def function 用法：def 命名(參數or變數):程式區塊 →如下
+
 
 import random
 def play_game():
