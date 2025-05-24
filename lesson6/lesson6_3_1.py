@@ -1,4 +1,10 @@
-# 架構化程式 →用def
+# 架構化程式碼 →用def(自建Function) or 內建Function
+# 簡化邏輯思考複雜度
+# 重複呼叫
+# 簡化主程式中的程式碼
+
+# def function 用法：def 命名(參數or變數):程式區塊 →如下
+
 import random
 def play_game():
     min = 1
