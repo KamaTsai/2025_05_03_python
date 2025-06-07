@@ -34,7 +34,7 @@ class NameSearchApp:
 
 
         # 搜尋結果標籤
-        self.results_label = ttk.Label(root, text="搜尋結果：")
+        self.results_label = ttk.Label(root, text="您的搜尋結果：")
         self.results_label.pack(pady=(10, 5))
 
         # 搜尋結果列表框
