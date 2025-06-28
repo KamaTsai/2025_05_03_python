@@ -1,128 +1,133 @@
-import yfinance as yf
-import datetime
-import os
-import glob
 import pandas as pd
-
-# --- 設定區 ---
-# 將設定值統一放在開頭，方便未來修改
-DATA_DIR = 'data'
-STOCKS = ['2330.TW', '2303.TW', '2454.TW', '2317.TW']
-START_DATE = '2000-01-01'
-# 新增需求：股票代碼與中文名稱的對應
-STOCK_MAP = {
-    '2330': '台積電',
-    '2317': '鴻海',
-    '2303': '聯電',
-    '2454': '聯發科'
-}
+import yfinance as yf
+import os
 
 def download_data():
+    #上下3個雙引號寫function的說明
     """
-    下載指定股票的歷史資料，並依據執行日期管理檔案。
+    1.下載yfinance股價數據資料：2330 台積電、2303 聯電、2454 聯發科、2317 鴻海
+    2.在目前目錄下建立一個data的資料夾，如果已經有這個資料夾，就不建立
+    3.下載的四檔股票必須儲存為4個csv檔，檔名為2330_{當天日期}.csv、2303_{當天日期}.csv
+    、2454_{當天日期}.csv、2317_{當天日期}.csv
+    4.檔案如果當天已經有下載，就不要再下載
+    5.每次下載成功後，刪除舊日期的檔案，只保留最新的一份
+    """    
+    
+    # 定義股票代碼列表
+    tickers = ['2330.TW', '2303.TW', '2454.TW', '2317.TW']
 
-    功能：
-    1. 下載 yfinance 的多檔股票資料。
-    2. 自動建立儲存資料的資料夾 (預設為 'data')。
-    3. 儲存的 CSV 檔名包含股票代碼與執行日期 (例: 2330_2024-07-26.csv)。
-    4. 每次執行時，會自動刪除該股票對應的舊日期檔案。
-    5. 如果當天的檔案已存在，則跳過下載。
-    6. 處理下載失敗或無資料的例外情況。
-    """
-    # 確保資料夾存在，如果不存在則建立
-    # exist_ok=True 讓程式在資料夾已存在時不會報錯
-    os.makedirs(DATA_DIR, exist_ok=True)
+    # 獲取今天的日期字串，格式為 YYYY-MM-DD
+    today_date = pd.Timestamp.today().strftime('%Y-%m-%d')
 
-    # 取得當前日期作為資料結束日期
-    today = datetime.date.today()
+    # 檢查並建立data資料夾
+    data_dir = 'data'
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
 
-    for stock_symbol in STOCKS:
-        stock_code = stock_symbol.split('.')[0]
-        
-        # 根據需求 #3，建立包含執行日期的檔案名稱
-        new_file_name = f"{DATA_DIR}/{stock_code}_{today.strftime('%Y-%m-%d')}.csv"
+    # 遍歷所有股票代碼
+    for ticker in tickers:
+        base_code = ticker.split('.')[0]
+        # 規則 3: 建立包含今天日期的檔名
+        filename = f"{base_code}_{today_date}.csv"
+        filepath = os.path.join(data_dir, filename)
 
-        # 根據需求 #4，刪除此股票的舊檔案
-        # 使用 glob 尋找所有符合 '代碼_*.csv' 格式的檔案
-        old_files = glob.glob(f"{DATA_DIR}/{stock_code}_*.csv")
-        for old_file in old_files:
-            if old_file != new_file_name:
-                try:
-                    os.remove(old_file)
-                    print(f"已刪除舊檔案: {old_file}")
-                except OSError as e:
-                    print(f"刪除檔案 {old_file} 失敗: {e}")
-
-        # 根據需求 #5，如果今日檔案已存在，則跳過
-        if os.path.exists(new_file_name):
-            print(f"今日檔案 {new_file_name} 已存在，跳過下載。")
+        # 規則 4: 如果當天檔案已存在，則跳過
+        if os.path.exists(filepath):
+            print(f"{filename} 當天檔案已存在，跳過下載。")
             continue
 
-        # 執行下載
-        print(f"開始下載 {stock_symbol} 資料...")
         try:
-            # yfinance 的 end 參數可以接受 datetime 物件
-            data = yf.download(stock_symbol, start=START_DATE, end=today)
-            
+            # 下載數據
+            print(f"下載股票數據： {ticker}...")
+            data = yf.download(ticker, start='2024-01-01',
+                               end=today_date,
+                               auto_adjust=True,
+                               progress=False)  # 關閉下載進度條，讓輸出更簡潔
+
             if data.empty:
-                print(f"警告：無法下載 {stock_symbol} 的資料，可能是代碼錯誤或該日期範圍無資料。")
-            else:
-                data.to_csv(new_file_name)
-                print(f"已成功下載並儲存至 {new_file_name}")
+                print(f"找不到 {ticker} 的數據或日期範圍內無資料，跳過。")
+                continue
+
+            data.to_csv(filepath)
+            print(f"儲存 {ticker} 至 {filepath}")
+
+            # 規則 5: 刪除舊檔案
+            print(f"正在清理 {base_code} 的舊檔案...")
+            for old_file in os.listdir(data_dir):
+                if old_file.startswith(f"{base_code}_") and old_file != filename:
+                    os.remove(os.path.join(data_dir, old_file))
+                    print(f"已刪除舊檔案： {old_file}")
         except Exception as e:
-            print(f"下載 {stock_symbol} 時發生錯誤: {e}")
-
-def combine_data():
-    """
-    讀取下載的 CSV 檔案，將各股的收盤價合併成一個 DataFrame。
-    """
-    today = datetime.date.today()
-    all_closes = []
-
-    print("\n--- 開始合併收盤價資料 ---")
-    for stock_symbol in STOCKS:
-        stock_code = stock_symbol.split('.')[0]
-        file_path = f"{DATA_DIR}/{stock_code}_{today.strftime('%Y-%m-%d')}.csv"
-
-        if os.path.exists(file_path):
-            # 修正：使用 index_col=0 來讀取 CSV。
-            # 錯誤 'ValueError: 'Date' is not in list' 表示 'Date' 欄位未找到。
-            # yfinance 儲存的 CSV 中，日期通常是第一欄(索引)，但欄位名稱可能不固定。
-            # 使用 index_col=0 更穩健，它會直接將第一欄作為索引。
-            df = pd.read_csv(file_path, index_col=0, parse_dates=True)
-            df.index.name = 'Date'  # 確保索引名稱統一為 'Date'
+            print(f"下載 {ticker} 時發生錯誤: {e}")
             
-            # 檢查 STOCK_MAP 中是否存在該代碼
-            if stock_code in STOCK_MAP:
-                # 取得收盤價，並根據 STOCK_MAP 重新命名
-                close_series = df[['Close']].rename(columns={'Close': STOCK_MAP[stock_code]})
-                all_closes.append(close_series)
-            else:
-                print(f"警告：在 STOCK_MAP 中找不到代碼 {stock_code} 的對應名稱。")
-        else:
-            print(f"警告：找不到檔案 {file_path}，無法合併資料。")
 
-    if not all_closes:
-        print("沒有任何資料可供合併。")
-        return None
+def combine_close_prices():
+    """
+    組合這四個csv檔成為一個DataFrame，要組合的只有欄位`Close`，也就是當天的收盤價
+    - 檔案名稱`2330_xxxx1`欄位名稱為`台積電`
+    - 檔案名稱`2303_xxxx1`欄位名稱為`聯電`
+    - 檔案名稱`2454_xxxx1`欄位名稱為`聯發科`
+    - 檔案名稱`2317_xxxx1`欄位名稱為`鴻海`
+    ###Date要顯示今天日期   
+    由於今日是例假日或國定假日，股市沒有開盤，所以沒有資料
+    解決方法：只顯示csv檔內所有的資料，而不是使用日期 
+    """
+    data_dir = 'data'
+    combined_df = pd.DataFrame()
+    
+    # 定義股票代碼和對應的中文名稱
+    stock_map = {
+        '2330': '台積電',
+        '2303': '聯電',
+        '2454': '聯發科',
+        '2317': '鴻海'
+    }
 
-    # 使用 concat 將所有 Series 合併成一個 DataFrame
-    # axis=1 表示將 Series 作為新的欄位進行水平合併
-    combined_df = pd.concat(all_closes, axis=1)
-    
-    # 移除所有值都是 NaN 的列 (例如假日)，確保資料乾淨
-    combined_df.dropna(how='all', inplace=True)
-    
+    # 遍歷資料夾中的所有檔案
+    for filename in os.listdir(data_dir):
+        if filename.endswith('.csv'):
+            filepath = os.path.join(data_dir, filename)
+            base_code = filename.split('_')[0]
+            
+            if base_code in stock_map:
+                try:
+                    df = pd.read_csv(filepath, index_col=0, parse_dates=True)
+                    if 'Close' in df.columns:
+                        # 確保 'Close' 欄位是數值型態，無法轉換的會變成 NaN
+                        close_prices = pd.to_numeric(df['Close'], errors='coerce')
+                        # 將處理過的收盤價加入 combined_df
+                        combined_df[stock_map[base_code]] = close_prices
+                    else:
+                        print(f"檔案 {filename} 中找不到 'Close' 欄位。")
+                except Exception as e:
+                    print(f"讀取檔案 {filename} 時發生錯誤: {e}")
+       
+    if combined_df.empty:
+        print("\n在 data 資料夾中找不到任何有效的股票數據。")
+        return combined_df
+
+    # 【關鍵修正】
+    # 移除索引不是有效日期的行 (例如 'Ticker' 或 'Date' 字串)
+    # pd.to_datetime 會將無法轉換的索引變成 NaT (Not a Time)
+    # .notna() 會篩選出所有轉換成功的行，也就是有效的日期
+    combined_df = combined_df[pd.to_datetime(combined_df.index, errors='coerce').notna()]
+
+    # 按照日期排序，確保資料是時間序列
+    combined_df.sort_index(inplace=True)
+
     return combined_df
 
-def main():
-    """主執行函式"""
-    download_data()
     
-    combined_data = combine_data()
-    if combined_data is not None:
-        print("\n--- 合併後的資料 (顯示最後5筆) ---")
-        print(combined_data.tail())
+#起始點一定寫在main
+def main():
+    download_data()
+    combined_df = combine_close_prices()
+    if not combined_df.empty:
+        print("\n合併後的收盤價數據：")
+        print(combined_df.head())
+        print("...")
+        print(combined_df.tail())
 
-if __name__ == "__main__":
+#兩個開頭底線是內建的
+if __name__ == '__main__':
     main()
